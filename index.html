@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    :root { --primary: #4A90E2; --bg: #F5F7FB; --white: #ffffff; --accent: #FF4757; }
+    body { font-family: 'Pretendard', sans-serif; margin: 0; background: var(--bg); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    
+    /* 상단 헤더 */
+    header { padding: 20px 20px 0 20px; }
+    .header-date { font-size: 1.2rem; font-weight: 800; color: #333; }
+    .noti-btn { position: relative; font-size: 1.5rem; cursor: pointer; color: #555; width: fit-content; margin-top: 5px; }
+    .red-dot { position: absolute; top: 0; right: 0; width: 10px; height: 10px; background: var(--accent); border-radius: 50%; border: 2px solid var(--bg); display: none; }
+
+    /* 메인 컨텐츠 5:5 분할 */
+    #main-view { flex: 1; display: flex; padding: 15px; gap: 15px; overflow-y: auto; padding-bottom: 90px; }
+    .panel { flex: 1; background: var(--white); border-radius: 20px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+    h3 { font-size: 0.95rem; margin-top: 0; color: var(--primary); border-bottom: 1px solid #F0F4F8; padding-bottom: 10px; }
+
+    /* 리스트 스타일 */
+    .list-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #F8FAFC; border-radius: 12px; margin-bottom: 8px; }
+    .list-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); }
+
+    /* 하단 네비게이션 */
+    nav { position: fixed; bottom: 0; width: 100%; height: 75px; background: var(--white); display: flex; justify-content: space-around; align-items: center; border-top: 1px solid #EEE; z-index: 100; }
+    .nav-item { text-align: center; color: #A0AEC0; cursor: pointer; font-size: 0.8rem; flex: 1; transition: 0.2s; }
+    .nav-item.active { color: var(--primary); font-weight: bold; }
+    .nav-item i { font-size: 1.3rem; display: block; margin-bottom: 4px; }
+
+    /* 계획 탭 (과목 선택) */
+    .subject-selector { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 15px; }
+    .sub-btn { padding: 8px; border: 1px solid #E2E8F0; border-radius: 8px; font-size: 0.85rem; cursor: pointer; background: #fff; }
+    .sub-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    textarea { width: 100%; flex: 1; border: 1px solid #E2E8F0; border-radius: 12px; padding: 12px; resize: none; font-size: 0.95rem; box-sizing: border-box; }
+
+    /* 일정 탭 */
+    .input-group { display: flex; flex-direction: column; gap: 10px; }
+    input { padding: 12px; border: 1px solid #E2E8F0; border-radius: 10px; font-size: 0.95rem; }
+    .save-btn { background: var(--primary); color: #fff; border: none; padding: 15px; border-radius: 12px; font-weight: bold; cursor: pointer; }
+
+    /* 모달 (알림창) */
+    .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 200; backdrop-filter: blur(2px); }
+    .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; width: 85%; max-height: 70%; border-radius: 25px; padding: 25px; z-index: 250; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .exit-btn { font-size: 1.5rem; cursor: pointer; color: #999; }
+    .tab-header { display: flex; gap: 15px; border-bottom: 1px solid #EEE; padding-bottom: 10px; margin-bottom: 15px; }
+    .tab-link { font-weight: bold; cursor: pointer; color: #BBB; }
+    .tab-link.active { color: var(--primary); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-date" id="currentDate"></div>
+    <div class="noti-btn" onclick="openNoti()">
+      <i class="fa-solid fa-bell"></i>
+      <div class="red-dot" id="notiBadge"></div>
+    </div>
+  </header>
+
+  <div id="main-view">
+    <div class="panel">
+      <h3>오늘 할 일</h3>
+      <div id="todayList"></div>
+    </div>
+    <div class="panel">
+      <h3>다가오는 일정</h3>
+      <div id="upcomingList"></div>
+    </div>
+  </div>
+
+  <nav>
+    <div class="nav-item active" onclick="changeNav('home', this)"><i class="fa-solid fa-house"></i>홈</div>
+    <div class="nav-item" onclick="changeNav('plan', this)"><i class="fa-solid fa-pen-nib"></i>계획</div>
+    <div class="nav-item" onclick="changeNav('schedule', this)"><i class="fa-solid fa-calendar-plus"></i>일정</div>
+    <div class="nav-item" onclick="changeNav('settings', this)"><i class="fa-solid fa-gear"></i>설정</div>
+  </nav>
+
+  <div class="overlay" id="overlay"></div>
+  <div class="modal" id="notiModal">
+    <div class="modal-header">
+      <div class="tab-header">
+        <span class="tab-link active" id="tab-today" onclick="renderSummary('today')">오늘 일정</span>
+        <span class="tab-link" id="tab-past" onclick="openPastPicker()">지난 일정 <i class="fa-solid fa-calendar-days"></i></span>
+      </div>
+      <i class="fa-solid fa-circle-xmark exit-btn" onclick="closeNoti()"></i>
+    </div>
+    <input type="date" id="pastPicker" style="display:none; margin-bottom:10px; width:100%;" onchange="renderSummary('past')">
+    <div id="summaryContent"></div>
+  </div>
+
+  <script>
+    let schedules = JSON.parse(localStorage.getItem('study_schedules')) || [];
+    let subjectPlans = JSON.parse(localStorage.getItem('subject_plans')) || { "국어":"", "수학":"", "영어":"", "역사":"", "사탐":"", "과탐":"" };
+    let currentSubject = "국어";
+
+    window.onload = () => {
+      document.getElementById('currentDate').innerText = new Date().toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+      renderHome();
+      checkBadge();
+    };
+
+    function changeNav(tab, el) {
+      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+      el.classList.add('active');
+      const view = document.getElementById('main-view');
+
+      if(tab === 'home') {
+        view.innerHTML = `<div class="panel"><h3>오늘 할 일</h3><div id="todayList"></div></div><div class="panel"><h3>다가오는 일정</h3><div id="upcomingList"></div></div>`;
+        renderHome();
+      } else if(tab === 'plan') {
+        view.innerHTML = `
+          <div class="panel" style="flex:1">
+            <h3>과목별 계획 짜기</h3>
+            <div class="subject-selector">
+              ${Object.keys(subjectPlans).map(s => `<div class="sub-btn ${s==currentSubject?'active':''}" onclick="setSubject('${s}', this)">${s}</div>`).join('')}
+            </div>
+            <textarea id="memo" oninput="saveMemo(this.value)" placeholder="${currentSubject} 계획을 적어보세요...">${subjectPlans[currentSubject]}</textarea>
+          </div>`;
+      } else if(tab === 'schedule') {
+        view.innerHTML = `
+          <div class="panel" style="flex:1">
+            <h3>일정 및 마감일 등록</h3>
+            <div class="input-group">
+              <input type="text" id="sName" placeholder="일정 이름">
+              <input type="datetime-local" id="sDate">
+              <button class="save-btn" onclick="addSchedule()">등록하기</button>
+            </div>
+          </div>`;
+      } else if(tab === 'settings') {
+        view.innerHTML = `
+          <div class="panel" style="flex:1; justify-content:center; align-items:center;">
+            <button onclick="resetAll()" style="background:var(--accent); color:#fff; border:none; padding:20px; border-radius:15px; font-weight:bold; cursor:pointer; width:80%;">모든 플래너 초기화</button>
+          </div>`;
+      }
+    }
+
+    function renderHome() {
+      const today = new Date().toISOString().split('T')[0];
+      const tDiv = document.getElementById('todayList');
+      const uDiv = document.getElementById('upcomingList');
+      if(!tDiv) return;
+
+      const todayTasks = schedules.filter(s => s.date.startsWith(today));
+      tDiv.innerHTML = todayTasks.length ? todayTasks.map(s => `
+        <div class="list-item">
+          <span>${s.title}</span>
+          <input type="checkbox" ${s.done?'checked':''} onclick="toggleDone('${s.id}')">
+        </div>`).join('') : "<p style='color:#CCC; text-align:center;'>오늘 일정이 없습니다.</p>";
+
+      const upcoming = schedules.filter(s => new Date(s.date) >= new Date().setHours(0,0,0,0))
+                                .sort((a,b) => new Date(a.date) - new Date(b.date));
+      uDiv.innerHTML = upcoming.length ? upcoming.map(s => `
+        <div style="margin-bottom:10px; padding:5px; border-bottom:1px solid #F0F0F0;">
+          <div style="font-size:0.7rem; color:var(--primary);">${s.date.replace('T',' ')}</div>
+          <div style="font-size:0.85rem;">${s.title}</div>
+        </div>`).join('') : "<p style='color:#CCC; text-align:center;'>예정된 일정이 없습니다.</p>";
+    }
+
+    function addSchedule() {
+      const title = document.getElementById('sName').value;
+      const date = document.getElementById('sDate').value;
+      if(!title || !date) return alert("내용을 입력해주세요!");
+      
+      const newS = { id:Date.now().toString(), title, date, done:false, seen:false };
+      schedules.push(newS);
+      localStorage.setItem('study_schedules', JSON.stringify(schedules));
+      google.script.run.syncToSheet({type: "ADD_SCHEDULE", payload: newS});
+      alert("등록되었습니다.");
+      changeNav('home', document.querySelector('.nav-item'));
+      checkBadge();
+    }
+
+    function toggleDone(id) {
+      schedules = schedules.map(s => s.id === id ? {...s, done: !s.done} : s);
+      localStorage.setItem('study_schedules', JSON.stringify(schedules));
+    }
+
+    function setSubject(s, el) {
+      currentSubject = s;
+      document.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById('memo').value = subjectPlans[s];
+      document.getElementById('memo').placeholder = s + " 계획을 적어보세요...";
+    }
+
+    function saveMemo(val) {
+      subjectPlans[currentSubject] = val;
+      localStorage.setItem('subject_plans', JSON.stringify(subjectPlans));
+    }
+
+    function resetAll() {
+      if(confirm("정말로 모든 데이터를 초기화하고 스프레드시트에 백업하시겠습니까?")) {
+        google.script.run.withSuccessHandler(() => {
+          localStorage.clear();
+          location.reload();
+        }).syncToSheet({type: "RESET_BACKUP", payload: schedules});
+      }
+    }
+
+    function checkBadge() {
+      const today = new Date().toISOString().split('T')[0];
+      const hasNew = schedules.some(s => s.date.startsWith(today) && !s.seen);
+      document.getElementById('notiBadge').style.display = hasNew ? 'block' : 'none';
+    }
+
+    function openNoti() {
+      document.getElementById('notiModal').style.display = 'block';
+      document.getElementById('overlay').style.display = 'block';
+      renderSummary('today');
+      // 확인 처리
+      const today = new Date().toISOString().split('T')[0];
+      schedules = schedules.map(s => s.date.startsWith(today) ? {...s, seen: true} : s);
+      localStorage.setItem('study_schedules', JSON.stringify(schedules));
+      checkBadge();
+    }
+
+    function closeNoti() {
+      document.getElementById('notiModal').style.display = 'none';
+      document.getElementById('overlay').style.display = 'none';
+    }
+
+    function openPastPicker() {
+      document.getElementById('pastPicker').style.display = 'block';
+      document.getElementById('tab-today').classList.remove('active');
+      document.getElementById('tab-past').classList.add('active');
+    }
+
+    function renderSummary(mode) {
+      let targetDate = new Date().toISOString().split('T')[0];
+      if(mode === 'past') {
+        targetDate = document.getElementById('pastPicker').value;
+      } else {
+        document.getElementById('pastPicker').style.display = 'none';
+        document.getElementById('tab-today').classList.add('active');
+        document.getElementById('tab-past').classList.remove('active');
+      }
+
+      const list = schedules.filter(s => s.date.startsWith(targetDate));
+      document.getElementById('summaryContent').innerHTML = list.length ? list.map(s => `
+        <div style="padding:10px; border-bottom:1px solid #EEE;">
+          <b>[${s.date.split('T')[1]}]</b> ${s.title}
+        </div>`).join('') : "<p style='color:#999'>일정이 없습니다.</p>";
+    }
+  </script>
+</body>
+</html>
